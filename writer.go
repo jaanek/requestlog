@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"regexp"
 	"time"
+        "net/http/httputil"
 
 	"github.com/jpillora/sizestr"
 )
@@ -20,6 +21,13 @@ func monitorWriter(w http.ResponseWriter, r *http.Request, opts *Options) *monit
 	if ip == "127.0.0.1" || ip == "::1" {
 		ip = ""
 	}
+        // print request
+        requestDump, err := httputil.DumpRequest(r, true)
+        if err != nil {
+          fmt.Println(err)
+        }
+        // fmt.Println(string(requestDump))
+        // return
 	return &monitorableWriter{
 		opts:   opts,
 		t0:     time.Now(),
@@ -28,6 +36,7 @@ func monitorWriter(w http.ResponseWriter, r *http.Request, opts *Options) *monit
 		method: r.Method,
 		path:   r.URL.Path,
 		ip:     ip,
+                reqDump: string(requestDump),
 	}
 }
 
@@ -38,6 +47,8 @@ type monitorableWriter struct {
 	//handler
 	w http.ResponseWriter
 	r *http.Request
+        reqDump string
+        resDump string
 	//stats
 	method, path, ip string
 	Code             int
@@ -50,6 +61,7 @@ func (m *monitorableWriter) Header() http.Header {
 
 func (m *monitorableWriter) Write(p []byte) (int, error) {
 	m.Size += int64(len(p))
+        m.resDump += string(p)
 	return m.w.Write(p)
 }
 
@@ -104,6 +116,9 @@ func (m *monitorableWriter) Log() {
 	})
 	//fmt is threadsafe :)
 	fmt.Fprint(m.opts.Writer, buff.String())
+        fmt.Fprint(m.opts.Writer, m.reqDump+"\n")
+        fmt.Fprint(m.opts.Writer, "==Response==\n")
+        fmt.Fprint(m.opts.Writer, m.resDump+"\n\n")
 }
 
 func (m *monitorableWriter) colorCode() string {
